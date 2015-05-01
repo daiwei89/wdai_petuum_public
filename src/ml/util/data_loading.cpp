@@ -11,6 +11,7 @@
 #include <ml/util/data_loading.hpp>
 #include <snappy.h>
 #include <iterator>
+#include <cmath>
 
 namespace petuum {
 namespace ml {
@@ -36,13 +37,13 @@ void ReadDataLabelBinary(const std::string& filename,
     // Read the label
     is.read(reinterpret_cast<char*>(&(*labels)[i]), sizeof(int32_t));
     if (label_one_based) {
-      --(*labels)[i];
+      CHECK_LE(0, --(*labels)[i]) << "label is not one-based";
     }
     // Read the feature
     is.read(reinterpret_cast<char*>(cache.data()), sizeof(float) * feature_dim);
     if (feature_one_based) {
       for (int j = 0; j < feature_dim; ++j) {
-        --cache[j];
+        CHECK_LE(0, --cache[j]) << "feature is not one-based";
       }
     }
     (*features)[i] = new DenseFeature<float>(cache);
@@ -84,14 +85,14 @@ namespace {
 
 // Return the label. feature_one_based = true assumes
 // feature index starts from 1. Analogous for label_one_based.
-int32_t ParseLibSVMLine(const std::string& line, std::vector<int32_t>* feature_ids,
+float ParseLibSVMLine(const std::string& line, std::vector<int32_t>* feature_ids,
     std::vector<float>* feature_vals, bool feature_one_based,
     bool label_one_based) {
   feature_ids->clear();
   feature_vals->clear();
   char *ptr = 0, *endptr = 0;
   // Read label.
-  int label = strtol(line.data(), &endptr, base);
+  float label = strtof(line.data(), &endptr);
   label = label_one_based ? label - 1 : label;
   ptr = endptr;
 
@@ -141,6 +142,32 @@ void ReadDataLabelLibSVM(const std::string& filename,
     int32_t feature_dim, int32_t num_data,
     std::vector<AbstractFeature<float>*>* features, std::vector<int32_t>* labels,
     bool feature_one_based, bool label_one_based, bool snappy_compressed) {
+  std::vector<float> float_labels;
+  ReadDataLabelLibSVM(filename, feature_dim, num_data, features, &float_labels,
+    feature_one_based, label_one_based, snappy_compressed);
+  labels->resize(float_labels.size());
+  for (int i = 0; i < float_labels.size(); ++i) {
+    (*labels)[i] = round(float_labels[i]);
+  }
+}
+
+void ReadDataLabelLibSVM(const std::string& filename,
+    int32_t feature_dim, int32_t num_data,
+    std::vector<std::vector<float> >* features, std::vector<int32_t>* labels,
+    bool feature_one_based, bool label_one_based, bool snappy_compressed) {
+  std::vector<float> float_labels;
+  ReadDataLabelLibSVM(filename, feature_dim, num_data, features, &float_labels,
+    feature_one_based, label_one_based, snappy_compressed);
+  labels->resize(float_labels.size());
+  for (int i = 0; i < float_labels.size(); ++i) {
+    (*labels)[i] = round(float_labels[i]);
+  }
+}
+
+void ReadDataLabelLibSVM(const std::string& filename,
+    int32_t feature_dim, int32_t num_data,
+    std::vector<AbstractFeature<float>*>* features, std::vector<float>* labels,
+    bool feature_one_based, bool label_one_based, bool snappy_compressed) {
   petuum::HighResolutionTimer read_timer;
   features->resize(num_data);
   labels->resize(num_data);
@@ -152,7 +179,7 @@ void ReadDataLabelLibSVM(const std::string& filename,
   std::vector<float> feature_vals(feature_dim);
   for (std::string line; std::getline(data_stream, line) && i < num_data;
       ++i) {
-    int32_t label = ParseLibSVMLine(line, &feature_ids,
+    float label = ParseLibSVMLine(line, &feature_ids,
         &feature_vals, feature_one_based, label_one_based);
     (*labels)[i] = label;
     (*features)[i] = new SparseFeature<float>(feature_ids, feature_vals,
@@ -166,7 +193,7 @@ void ReadDataLabelLibSVM(const std::string& filename,
 
 void ReadDataLabelLibSVM(const std::string& filename,
     int32_t feature_dim, int32_t num_data,
-    std::vector<std::vector<float> >* features, std::vector<int32_t>* labels,
+    std::vector<std::vector<float> >* features, std::vector<float>* labels,
     bool feature_one_based, bool label_one_based, bool snappy_compressed) {
   petuum::HighResolutionTimer read_timer;
   features->resize(num_data);
@@ -179,7 +206,7 @@ void ReadDataLabelLibSVM(const std::string& filename,
   int i = 0;
   for (std::string line; std::getline(data_stream, line) && i < num_data;
       ++i) {
-    int32_t label = ParseLibSVMLine(line, &feature_ids,
+    float label = ParseLibSVMLine(line, &feature_ids,
         &feature_vals, feature_one_based, label_one_based);
     (*labels)[i] = label;
     (*features)[i].resize(feature_dim);

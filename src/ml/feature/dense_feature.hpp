@@ -32,6 +32,7 @@ public:
   }
 
   void Init(const std::vector<V>& val) {
+    this->feature_dim_ = val.size();
     data_ = val;
   }
 
