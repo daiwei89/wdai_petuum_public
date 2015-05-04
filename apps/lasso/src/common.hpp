@@ -16,4 +16,5 @@ DECLARE_bool(global_data);
 
 DECLARE_int32(w_table_id);
 DECLARE_int32(num_epochs);
+DECLARE_int32(num_epochs_per_eval);
 DECLARE_double(learning_rate);

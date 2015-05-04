@@ -80,12 +80,11 @@ void LassoEngine::Start() {
   petuum::HighResolutionTimer total_timer;
 
   int worker_rank = FLAGS_client_id * FLAGS_num_threads + thread_id;
-  int num_workers = FLAGS_num_clients * FLAGS_num_threads;
-  int num_features_per_thread = num_features_ /
+  int num_feature_per_worker = num_features_ /
     FLAGS_num_clients / FLAGS_num_threads;
-  int feature_start = worker_rank * num_features_per_thread;
+  int feature_start = worker_rank * num_feature_per_worker;
   int feature_end = (worker_rank == FLAGS_num_clients * FLAGS_num_threads - 1)
-    ? num_features_ : feature_start + num_features_per_thread;
+    ? num_features_ : feature_start + num_feature_per_worker;
 
   petuum::Table<float> w_table =
     petuum::PSTableGroup::GetTableOrDie<float>(FLAGS_w_table_id);
@@ -97,37 +96,28 @@ void LassoEngine::Start() {
   pg_config.num_samples = num_samples_;
   ProxGrad pg(pg_config);
 
-  petuum::ml::DenseFeature<float> w_me;
-  petuum::ml::DenseFeature<float> w_all;
   int eval_counter = 0;
   for (int epoch = 1; epoch <= FLAGS_num_epochs; ++epoch) {
-    LOG(INFO) << "epoch: " << epoch;
-    // w_other = w_all - w_me
-    petuum::RowAccessor row_acc;
-    w_table.Get(worker_rank, &row_acc);
-    const auto& r = row_acc.Get<petuum::DenseRow<float>>();
-    r.CopyToDenseFeature(&w_me);
-    w_table.Get(num_workers, &row_acc);
-    const auto& r_all = row_acc.Get<petuum::DenseRow<float>>();
-    r_all.CopyToDenseFeature(&w_all);
-    FeatureScaleAndAdd(-1, w_me, &w_all);   // w_all = w_other.
-    pg.ProxStep(X_cols_, w_all, Y_, FLAGS_learning_rate);
+    pg.ProxStep(X_cols_, Y_, FLAGS_learning_rate);
 
-    // Evaluate objective value.
-    loss_recorder.IncLoss(eval_counter, "FullLoss", pg.EvalL1Penalty());
-    loss_recorder.IncLoss(eval_counter, "BetaNNZ", pg.EvalBetaNNZ());
     if (worker_rank == 0) {
-      LOG(INFO) << "recording epoch " << epoch;
-      loss_recorder.IncLoss(eval_counter, "FullLoss", pg.EvalSqLoss(w_all, Y_));
-      loss_recorder.IncLoss(eval_counter, "Epoch", epoch);
-      loss_recorder.IncLoss(eval_counter, "Time", total_timer.elapsed());
-    }
-    if (worker_rank == 0 && epoch % 10 == 0) {
       LOG(INFO) << "Epoch " << epoch << " finished. Time: "
-        << total_timer.elapsed() << " "
-        << loss_recorder.PrintOneLoss(eval_counter - 1);
+        << total_timer.elapsed();
+      if (eval_counter > 0) {
+        LOG(INFO) << loss_recorder.PrintOneLoss(eval_counter - 1);
+      }
     }
-    eval_counter++;
+    // Evaluate objective value.
+    if (epoch == 1 || epoch % FLAGS_num_epochs_per_eval == 0) {
+      loss_recorder.IncLoss(eval_counter, "FullLoss", pg.EvalL1Penalty());
+      loss_recorder.IncLoss(eval_counter, "BetaNNZ", pg.EvalBetaNNZ());
+      if (worker_rank == 0) {
+        loss_recorder.IncLoss(eval_counter, "FullLoss", pg.EvalSqLoss(Y_));
+        loss_recorder.IncLoss(eval_counter, "Epoch", epoch);
+        loss_recorder.IncLoss(eval_counter, "Time", total_timer.elapsed());
+      }
+      eval_counter++;
+    }
   }
   petuum::PSTableGroup::GlobalBarrier();
 

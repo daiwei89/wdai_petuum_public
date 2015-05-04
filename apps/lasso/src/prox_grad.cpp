@@ -20,67 +20,56 @@ ProxGrad::ProxGrad(const ProxGradConfig& config) :
 
 void ProxGrad::ProxStep(
     const std::vector<petuum::ml::SparseFeature<float>*>& X_cols,
-    const petuum::ml::DenseFeature<float>& w_other,
     const petuum::ml::DenseFeature<float>& y,
     float lr) {
-  CHECK_EQ(num_samples_, w_other.GetFeatureDim());
+  petuum::ml::DenseFeature<float> w_all;
+  petuum::RowAccessor row_acc;
+  w_table_.Get(0, &row_acc);
+  const auto& w_all_row = row_acc.Get<petuum::DenseRow<float>>();
+  w_all_row.CopyToDenseFeature(&w_all);
+  CHECK_EQ(num_samples_, w_all.GetFeatureDim());
   CHECK_EQ(num_samples_, y.GetFeatureDim());
-  // w = r_ + w_other
-  petuum::ml::DenseFeature<float> w = r_;
-  //LOG(INFO) << "w_other: " << w_other.ToString();
-  //LOG(INFO) << "y: " << y.ToString();
-  //LOG(INFO) << "w_me = r_: " << w.ToString();
-  FeatureScaleAndAdd(1, w_other, &w);
-  //LOG(INFO) << "w + w_other: " << w.ToString();
-
   // w -= y
-  FeatureScaleAndAdd(-1, y, &w);
-  //LOG(INFO) << "w - y: " << w.ToString();
+  FeatureScaleAndAdd(-1, y, &w_all);
 
+  // gradient = 2 * X_k^T (w_all - y)
   petuum::ml::DenseFeature<float> grad(num_features_);
   for (int j = 0; j < num_features_; ++j) {
-    grad[j] = SparseDenseFeatureDotProduct(
-        *(X_cols[feature_start_ + j]), w);
-    CHECK_EQ(feature_start_, 0);
-    //LOG(INFO) << "X[" << j << "]: " << X_cols[j]->ToString();
+    grad[j] = 2 * SparseDenseFeatureDotProduct(
+        *(X_cols[feature_start_ + j]), w_all);
   }
-  //LOG(INFO) << "grad: " << grad.ToString();
 
-  // delta_ = prox[beta - learning_rate * X_i^T (w - y)] - beta_
-  petuum::ml::DenseFeature<float> delta_ = beta_;
-  //LOG(INFO) << "beta: " << beta_.ToString();
-  FeatureScaleAndAdd(-lr, grad, &delta_);
-  //LOG(INFO) << "beta - lr * grad: " << delta_.ToString();
-  SoftThreshold(lr * FLAGS_lambda, &delta_);
-  //LOG(INFO) << "prox(beta - lr * grad): " << delta_.ToString();
-  //LOG(INFO) << "lr * lambda: " << lr * FLAGS_lambda;
-  FeatureScaleAndAdd(-1, beta_, &delta_);
-  //LOG(INFO) << "prox(beta - grad) - beta: " << delta_.ToString();
+  petuum::ml::DenseFeature<float> new_beta = beta_;
+  FeatureScaleAndAdd(-lr, grad, &new_beta);
+  SoftThreshold(lr * FLAGS_lambda, &new_beta);
 
-  // beta_ += delta_
-  FeatureScaleAndAdd(1, delta_, &beta_);
-  //LOG(INFO) << "new beta: " << beta_.ToString();
+  // delta_k^{c+1} = beta_k^{c+1} - beta_k^c
+  petuum::ml::DenseFeature<float> delta = new_beta;
+  FeatureScaleAndAdd(-1, beta_, &delta);
+  beta_ = new_beta;
 
-  // r_delta = X_i * \Delta_i
-  petuum::ml::DenseFeature<float> r_delta(num_samples_);
+  // X_k * delta_k^{c+1}
+  petuum::ml::DenseFeature<float> X_delta(num_samples_);
   for (int j = 0; j < num_features_; ++j) {
-    FeatureScaleAndAdd(delta_[j],
-        *(X_cols[feature_start_ + j]), &r_delta);
+    FeatureScaleAndAdd(delta[j],
+        *(X_cols[feature_start_ + j]), &X_delta);
   }
-  //LOG(INFO) << "update: " << r_delta.ToString();
+
   petuum::UpdateBatch<float> update(num_samples_);
   for (int i = 0; i < num_samples_; ++i) {
-    update.UpdateSet(i, i, r_delta[i]);
-    r_[i] += r_delta[i];    // r_ = r_ + X_i * \Delta
+    update.UpdateSet(i, i, X_delta[i]);
   }
-  w_table_.BatchInc(worker_rank_, update);
-  w_table_.BatchInc(num_workers_, update);
+  w_table_.BatchInc(0, update);
 }
 
 // Sum of sqloss for all data.
 float ProxGrad::EvalSqLoss(
-    const petuum::ml::DenseFeature<float>& w_all,
-    const petuum::ml::DenseFeature<float>& y) const {
+    const petuum::ml::DenseFeature<float>& y) {
+  petuum::ml::DenseFeature<float> w_all;
+  petuum::RowAccessor row_acc;
+  w_table_.Get(0, &row_acc);
+  const auto& w_all_row = row_acc.Get<petuum::DenseRow<float>>();
+  w_all_row.CopyToDenseFeature(&w_all);
   petuum::ml::DenseFeature<float> sq_err = w_all;
   FeatureScaleAndAdd(-1, y, &sq_err);
   float sq_loss = 0.;

@@ -49,6 +49,8 @@ int LossRecorder::FindField(const std::string& field_name) {
 }
 
 void LossRecorder::IncLoss(int ith, const std::string& field_name, float val) {
+  CHECK_GE(ith, 0);
+  CHECK_LT(ith, kProcessCacheSize);
   int field_id = FindField(field_name);
   CHECK_NE(-1, field_id) << "Field " << field_name << " not found.";
   max_eval_ = std::max(ith, max_eval_);
@@ -77,6 +79,8 @@ std::string LossRecorder::PrintAllLoss() {
 }
 
 std::string LossRecorder::PrintOneLoss(int ith) {
+  CHECK_GE(ith, 0);
+  CHECK_LT(ith, kProcessCacheSize);
   petuum::RowAccessor row_acc;
   loss_table_.Get(ith, &row_acc);
   const auto& loss_row = row_acc.Get<petuum::DenseRow<float>>();

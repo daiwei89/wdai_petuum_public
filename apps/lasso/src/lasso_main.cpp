@@ -26,6 +26,7 @@ DEFINE_string(Y_file, "", "Each line is a label y.");
 DEFINE_bool(global_data, false, "If true, all workers read from the same "
     "train_file. If false, append X. See train_file.");
 DEFINE_int32(num_epochs, 10, "# of data passes.");
+DEFINE_int32(num_epochs_per_eval, 5, "# of epoches between each evaluation.");
 DEFINE_double(learning_rate, 0.1, "Initial step size");
 
 // Misc
@@ -81,8 +82,9 @@ int main(int argc, char *argv[]) {
   table_config.table_info.oplog_dense_serialized =
     FLAGS_oplog_dense_serialized;
   table_config.table_info.dense_row_oplog_capacity = num_samples;
-  table_config.process_cache_capacity =
-    FLAGS_num_clients * FLAGS_num_threads + 1;
+  //table_config.process_cache_capacity =
+  //  FLAGS_num_clients * FLAGS_num_threads + 1;
+  table_config.process_cache_capacity = 1;  // just 1 summary row.
   table_config.oplog_capacity = table_config.process_cache_capacity;
   petuum::PSTableGroup::CreateTable(FLAGS_w_table_id, table_config);
 

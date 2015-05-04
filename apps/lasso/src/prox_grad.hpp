@@ -20,13 +20,11 @@ public:
 
   void ProxStep(
       const std::vector<petuum::ml::SparseFeature<float>*>& X_cols,
-      const petuum::ml::DenseFeature<float>& w_other,
       const petuum::ml::DenseFeature<float>& y,
       float lr) ;
 
   float EvalSqLoss(
-      const petuum::ml::DenseFeature<float>& w_all,
-      const petuum::ml::DenseFeature<float>& y) const;
+      const petuum::ml::DenseFeature<float>& y);
 
   float EvalL1Penalty() const;
 
