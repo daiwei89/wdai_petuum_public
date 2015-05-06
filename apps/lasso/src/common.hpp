@@ -13,6 +13,7 @@ DECLARE_int32(num_samples);
 DECLARE_string(X_file);
 DECLARE_string(Y_file);
 DECLARE_bool(global_data);
+DECLARE_string(output_prefix);
 
 DECLARE_int32(w_table_id);
 DECLARE_int32(num_epochs);

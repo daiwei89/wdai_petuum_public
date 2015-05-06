@@ -6,17 +6,19 @@ from os.path import join
 import time
 
 params = {
-    "lambda": 0
-    , "X_file": "/nfs/nas-0-16/wdai/datasets/lasso/ad/ad.libsvm.nano.trunc.trans.X"
-    , "Y_file": "/nfs/nas-0-16/wdai/datasets/lasso/ad/ad.libsvm.nano.trunc.trans.Y"
+    "lambda": 0.01
+    , "X_file": "/scratch/wdai/ad.libsvm.trans.X"
+    , "Y_file": "/scratch/wdai/ad.libsvm.trans.Y"
     , "global_data": "true"
-    , "num_epochs": 50
+    , "num_epochs": 200
     , "learning_rate": 0.001
-    , "staleness": 0
+    , "staleness": 10
+    , "num_epochs_per_eval": 5
     }
+exp_name = "ad"
 
 
-hostfile_name = "localserver"
+hostfile_name = "cogito-4" #"localserver"
 
 app_dir = dirname(dirname(os.path.realpath(__file__)))
 proj_dir = dirname(dirname(app_dir))
@@ -27,7 +29,7 @@ hostfile = join(proj_dir, "machinefiles", hostfile_name)
 
 petuum_params = {
     "hostfile": hostfile
-    , "num_threads": 1
+    , "num_threads": 2
     }
 
 env_params = (
@@ -40,7 +42,7 @@ ssh_cmd = (
     "ssh "
     "-o StrictHostKeyChecking=no "
     "-o UserKnownHostsFile=/dev/null "
-    #"-oLogLevel=quiet "
+    "-o LogLevel=quiet "
     )
 
 # Get host IPs
@@ -49,16 +51,31 @@ with open(hostfile, "r") as f:
 host_ips = [line.split()[1] for line in hostlines]
 petuum_params["num_clients"] = len(host_ips)
 
+output_filename = exp_name
+output_filename += ".N" + str(petuum_params["num_clients"])
+output_filename += ".T" + str(petuum_params["num_threads"])
+output_filename += ".L" + str(params["lambda"])
+output_filename += ".lr" + str(params["learning_rate"])
+output_filename += ".S" + str(params["staleness"])
+output_filename += ".E" + str(params["num_epochs"])
+output_prefix = join(app_dir, "output", output_filename)
+params["output_prefix"] = output_prefix
+cmd = "mkdir -p " + dirname(output_prefix)
+print cmd
+os.system(cmd)
+
 for ip in host_ips:
   cmd = ssh_cmd + ip + " killall -q " + prog_name
-#  os.system(cmd)
+  os.system(cmd)
 print "Done killing"
 
 for client_id, ip in enumerate(host_ips):
-  cmd = env_params + prog_path
+  cmd = ssh_cmd + ip + " "
+  cmd += env_params + prog_path
   petuum_params["client_id"] = client_id
   cmd += "".join([" --%s=%s" % (k,v) for k,v in petuum_params.items()])
   cmd += "".join([" --%s=%s" % (k,v) for k,v in params.items()])
+  cmd += " &"
   print cmd
   os.system(cmd)
 

@@ -100,13 +100,6 @@ void LassoEngine::Start() {
   for (int epoch = 1; epoch <= FLAGS_num_epochs; ++epoch) {
     pg.ProxStep(X_cols_, Y_, FLAGS_learning_rate);
 
-    if (worker_rank == 0) {
-      LOG(INFO) << "Epoch " << epoch << " finished. Time: "
-        << total_timer.elapsed();
-      if (eval_counter > 0) {
-        LOG(INFO) << loss_recorder.PrintOneLoss(eval_counter - 1);
-      }
-    }
     // Evaluate objective value.
     if (epoch == 1 || epoch % FLAGS_num_epochs_per_eval == 0) {
       loss_recorder.IncLoss(eval_counter, "FullLoss", pg.EvalL1Penalty());
@@ -115,6 +108,11 @@ void LassoEngine::Start() {
         loss_recorder.IncLoss(eval_counter, "FullLoss", pg.EvalSqLoss(Y_));
         loss_recorder.IncLoss(eval_counter, "Epoch", epoch);
         loss_recorder.IncLoss(eval_counter, "Time", total_timer.elapsed());
+        LOG(INFO) << "Epoch " << epoch << " finished. Time: "
+          << total_timer.elapsed();
+        if (eval_counter > 0) {
+          LOG(INFO) << loss_recorder.PrintOneLoss(eval_counter - 1);
+        }
       }
       eval_counter++;
     }
@@ -123,6 +121,10 @@ void LassoEngine::Start() {
 
   if (worker_rank == 0) {
     LOG(INFO) << "\n" << PrintExpDetail() << loss_recorder.PrintAllLoss();
+    std::string output_file = FLAGS_output_prefix + ".loss";
+    std::ofstream out(output_file);
+    out << PrintExpDetail() << loss_recorder.PrintAllLoss();
+    LOG(INFO) << "Printed results to " << output_file;
   }
   petuum::PSTableGroup::DeregisterThread();
 }

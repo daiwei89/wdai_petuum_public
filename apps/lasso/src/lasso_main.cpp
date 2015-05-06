@@ -28,6 +28,7 @@ DEFINE_bool(global_data, false, "If true, all workers read from the same "
 DEFINE_int32(num_epochs, 10, "# of data passes.");
 DEFINE_int32(num_epochs_per_eval, 5, "# of epoches between each evaluation.");
 DEFINE_double(learning_rate, 0.1, "Initial step size");
+DEFINE_string(output_prefix, "", "Will output to that path.");
 
 // Misc
 DEFINE_int32(w_table_id, 0, "Weight table's ID in PS.");
