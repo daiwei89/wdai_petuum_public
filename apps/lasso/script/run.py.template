@@ -5,12 +5,15 @@ from os.path import dirname
 from os.path import join
 import time
 
+app_dir = dirname(dirname(os.path.realpath(__file__)))
+proj_dir = dirname(dirname(app_dir))
+
 params = {
-    "lambda": 0.01
-    , "X_file": "/scratch/wdai/ad.libsvm.trans.X"
-    , "Y_file": "/scratch/wdai/ad.libsvm.trans.Y"
+    "lambda": 0.0001
+    , "X_file": join(app_dir, "dataset", "ad.libsvm.nano.trunc.trans.X")
+    , "Y_file": join(app_dir, "dataset", "ad.libsvm.nano.trunc.trans.Y")
     , "global_data": "true"
-    , "num_epochs": 200
+    , "num_epochs": 20
     , "learning_rate": 0.001
     , "staleness": 10
     , "num_epochs_per_eval": 5
@@ -18,10 +21,8 @@ params = {
 exp_name = "ad"
 
 
-hostfile_name = "cogito-4" #"localserver"
+hostfile_name = "localserver"
 
-app_dir = dirname(dirname(os.path.realpath(__file__)))
-proj_dir = dirname(dirname(app_dir))
 
 prog_name = "lasso_main"
 prog_path = join(app_dir, "bin", prog_name)

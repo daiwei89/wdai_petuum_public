@@ -1,0 +1,6 @@
+num_samples: 2
+num_features: 3
+feature_one_based: 1
+sample_one_based: 0
+snappy_compressed: 0
+format: libsvm
