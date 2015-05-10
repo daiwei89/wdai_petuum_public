@@ -11,7 +11,6 @@ struct ProxGradConfig {
   int feature_start = 0;
   int feature_end = 0;
   int num_samples = 0;
-  petuum::Table<float> w_table;
 };
 
 class ProxGrad {
@@ -21,7 +20,7 @@ public:
   void ProxStep(
       const std::vector<petuum::ml::SparseFeature<float>*>& X_cols,
       const petuum::ml::DenseFeature<float>& y,
-      float lr) ;
+      float lr, int my_clock);
 
   float EvalSqLoss(
       const petuum::ml::DenseFeature<float>& y);
@@ -46,6 +45,8 @@ private:
   petuum::ml::DenseFeature<float> r_;       // [num_samples_ x 1]
   //petuum::ml::DenseFeature<float> delta_;   // [num_features_ x 1]
   petuum::Table<float> w_table_;
+  petuum::Table<float> unused_table_;
+  petuum::Table<int64_t> staleness_table_;
 };
 
 }  // namespace lasso

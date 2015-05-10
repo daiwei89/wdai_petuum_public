@@ -8,6 +8,7 @@
 #include <fstream>
 #include <string>
 #include <sstream>
+#include <cstdint>
 
 
 namespace lasso {
@@ -86,19 +87,16 @@ void LassoEngine::Start() {
   int feature_end = (worker_rank == FLAGS_num_clients * FLAGS_num_threads - 1)
     ? num_features_ : feature_start + num_feature_per_worker;
 
-  petuum::Table<float> w_table =
-    petuum::PSTableGroup::GetTableOrDie<float>(FLAGS_w_table_id);
   ProxGradConfig pg_config;
   pg_config.worker_rank = worker_rank;
   pg_config.feature_start = feature_start;
   pg_config.feature_end = feature_end;
-  pg_config.w_table = w_table;
   pg_config.num_samples = num_samples_;
   ProxGrad pg(pg_config);
 
   int eval_counter = 0;
   for (int epoch = 1; epoch <= FLAGS_num_epochs; ++epoch) {
-    pg.ProxStep(X_cols_, Y_, FLAGS_learning_rate);
+    pg.ProxStep(X_cols_, Y_, FLAGS_learning_rate, epoch - 1);
 
     // Evaluate objective value.
     if (epoch == 1 || epoch % FLAGS_num_epochs_per_eval == 0) {
@@ -116,15 +114,28 @@ void LassoEngine::Start() {
       }
       eval_counter++;
     }
+    petuum::PSTableGroup::Clock();
   }
   petuum::PSTableGroup::GlobalBarrier();
 
   if (worker_rank == 0) {
     LOG(INFO) << "\n" << PrintExpDetail() << loss_recorder.PrintAllLoss();
-    std::string output_file = FLAGS_output_prefix + ".loss";
+    std::string output_file = FLAGS_output_dir + "/loss";
     std::ofstream out(output_file);
     out << PrintExpDetail() << loss_recorder.PrintAllLoss();
     LOG(INFO) << "Printed results to " << output_file;
+
+    std::string output_staleness = FLAGS_output_dir + "/staleness.dist";
+    std::ofstream out_staleness(output_staleness);
+    petuum::Table<int64_t> staleness_table =
+      petuum::PSTableGroup::GetTableOrDie<int64_t>(FLAGS_staleness_table_id);
+    petuum::RowAccessor row_acc;
+    staleness_table.Get(0, &row_acc);
+    const auto& row = row_acc.Get<petuum::DenseRow<int64_t>>();
+    for (int s = 0; s < 2 * FLAGS_staleness + 1; ++s) {
+      out_staleness << s - FLAGS_staleness << " " << row[s] << std::endl;
+    }
+    LOG(INFO) << "Printed staleness dist to " << output_staleness;
   }
   petuum::PSTableGroup::DeregisterThread();
 }

@@ -1,7 +1,9 @@
 #include "prox_grad.hpp"
 #include "common.hpp"
+#include <cmath>
 #include <vector>
 #include <ml/include/ml.hpp>
+#include <cstdint>
 
 namespace lasso {
 
@@ -13,20 +15,51 @@ ProxGrad::ProxGrad(const ProxGradConfig& config) :
   feature_end_(config.feature_end),
   num_features_(feature_end_ - feature_start_),
   beta_(num_features_),
-  r_(num_samples_),
-  w_table_(config.w_table) {
+  r_(num_samples_) {
+    w_table_ =
+      petuum::PSTableGroup::GetTableOrDie<float>(FLAGS_w_table_id);
+    unused_table_ =
+      petuum::PSTableGroup::GetTableOrDie<float>(FLAGS_unused_table_id);
+    staleness_table_ =
+      petuum::PSTableGroup::GetTableOrDie<int64_t>(FLAGS_staleness_table_id);
     CHECK_GT(num_features_, 0);
   }
 
 void ProxGrad::ProxStep(
     const std::vector<petuum::ml::SparseFeature<float>*>& X_cols,
     const petuum::ml::DenseFeature<float>& y,
-    float lr) {
-  petuum::ml::DenseFeature<float> w_all;
+    float lr, int my_clock) {
   petuum::RowAccessor row_acc;
+  // Read rows but not really use them
+  for (int z = 0; z < FLAGS_num_unused_rows; ++z) {
+    unused_table_.Get(z, &row_acc);
+  }
   w_table_.Get(0, &row_acc);
   const auto& w_all_row = row_acc.Get<petuum::DenseRow<float>>();
-  w_all_row.CopyToDenseFeature(&w_all);
+  std::vector<float> row_vec;
+  w_all_row.CopyToVector(&row_vec);
+
+  // Record clock differences. staleness_dist[0] corresponds to
+  // -FLAGS_staleness.
+  std::vector<int> staleness_dist(2 * FLAGS_staleness + 1);
+  for (int i = 0; i < num_workers_; ++i) {
+    if (i == worker_rank_) {
+      continue;   // skip my own clock.
+    }
+    int clock_diff = my_clock - row_vec[i + num_samples_];
+    CHECK_LE(std::abs(clock_diff), FLAGS_staleness) << "my_clock: " << my_clock
+      << " other clock: " << row_vec[i + num_samples_];
+    staleness_dist[clock_diff + FLAGS_staleness]++;
+  }
+  petuum::UpdateBatch<int64_t> staleness_update(2 * FLAGS_staleness + 1);
+  for (int s = 0; s < 2*FLAGS_staleness + 1; ++s) {
+    staleness_update.UpdateSet(s, s, staleness_dist[s]);
+  }
+  staleness_table_.BatchInc(0, staleness_update);
+
+  std::vector<float> w_only_vec(row_vec.begin(),
+      row_vec.begin() + num_samples_);
+  petuum::ml::DenseFeature<float> w_all(w_only_vec);
   CHECK_EQ(num_samples_, w_all.GetFeatureDim());
   CHECK_EQ(num_samples_, y.GetFeatureDim());
   // w -= y
@@ -55,11 +88,22 @@ void ProxGrad::ProxStep(
         *(X_cols[feature_start_ + j]), &X_delta);
   }
 
-  petuum::UpdateBatch<float> update(num_samples_);
+  petuum::UpdateBatch<float> update(num_samples_ + 1);
   for (int i = 0; i < num_samples_; ++i) {
     update.UpdateSet(i, i, X_delta[i]);
   }
+  // Increment clock by 1.
+  update.UpdateSet(num_samples_, worker_rank_ + num_samples_, 1);
   w_table_.BatchInc(0, update);
+
+  // Update unused rows
+  petuum::UpdateBatch<float> unused_update(FLAGS_num_unused_cols);
+  for (int i = 0; i < FLAGS_num_unused_cols; ++i) {
+    unused_update.UpdateSet(i, i, 1);
+  }
+  for (int z = 0; z < FLAGS_num_unused_rows; ++z) {
+    unused_table_.BatchInc(z, unused_update);
+  }
 }
 
 // Sum of sqloss for all data.
@@ -69,8 +113,13 @@ float ProxGrad::EvalSqLoss(
   petuum::RowAccessor row_acc;
   w_table_.Get(0, &row_acc);
   const auto& w_all_row = row_acc.Get<petuum::DenseRow<float>>();
-  w_all_row.CopyToDenseFeature(&w_all);
-  petuum::ml::DenseFeature<float> sq_err = w_all;
+  std::vector<float> row_vec;
+  w_all_row.CopyToVector(&row_vec);
+  std::vector<float> w_only_vec(row_vec.begin(),
+      row_vec.begin() + num_samples_);
+  //w_all_row.CopyToDenseFeature(&w_all);
+  //petuum::ml::DenseFeature<float> sq_err = w_all;
+  petuum::ml::DenseFeature<float> sq_err(w_only_vec);
   FeatureScaleAndAdd(-1, y, &sq_err);
   float sq_loss = 0.;
   for (int j = 0; j < num_samples_; ++j) {

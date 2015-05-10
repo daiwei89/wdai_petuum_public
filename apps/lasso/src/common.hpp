@@ -13,9 +13,13 @@ DECLARE_int32(num_samples);
 DECLARE_string(X_file);
 DECLARE_string(Y_file);
 DECLARE_bool(global_data);
-DECLARE_string(output_prefix);
+DECLARE_string(output_dir);
 
 DECLARE_int32(w_table_id);
+DECLARE_int32(unused_table_id);
+DECLARE_int32(staleness_table_id);
 DECLARE_int32(num_epochs);
 DECLARE_int32(num_epochs_per_eval);
 DECLARE_double(learning_rate);
+DECLARE_int32(num_unused_rows);
+DECLARE_int32(num_unused_cols);
