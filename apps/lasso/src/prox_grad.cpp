@@ -46,7 +46,11 @@ void ProxGrad::ProxStep(
     if (i == worker_rank_) {
       continue;   // skip my own clock.
     }
-    int clock_diff = my_clock - row_vec[i + num_samples_];
+    int clock_diff = row_vec[i + num_samples_] - my_clock;
+    // With SSPPush it's possible to see 1 clock ahead updates from other
+    // workers.
+    clock_diff = (clock_diff == FLAGS_staleness + 1) ?
+      FLAGS_staleness : clock_diff;
     CHECK_LE(std::abs(clock_diff), FLAGS_staleness) << "my_clock: " << my_clock
       << " other clock: " << row_vec[i + num_samples_];
     staleness_dist[clock_diff + FLAGS_staleness]++;

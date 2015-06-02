@@ -9,6 +9,7 @@
 #include <string>
 #include <sstream>
 #include <cstdint>
+#include <gflags/gflags.h>
 
 
 namespace lasso {
@@ -142,13 +143,17 @@ void LassoEngine::Start() {
 
 std::string LassoEngine::PrintExpDetail() const {
   std::stringstream ss;
-  ss << "num_clients: " << FLAGS_num_clients << std::endl;
-  ss << "num_app_threads: " << FLAGS_num_threads << std::endl;
-  ss << "staleness: " << FLAGS_staleness << std::endl;
-  ss << "num_features: " << num_features_ << std::endl;
-  ss << "lambda: " << FLAGS_lambda << std::endl;
-  ss << "num_epochs: " << FLAGS_num_epochs << std::endl;
-  ss << "learning_rate: " << FLAGS_learning_rate << std::endl;
+  const auto& flags = google::GetArgvs();
+  for (int i = 0; i < flags.size(); ++i) {
+    if (i == 0) {
+      continue;   // skip the program name.
+    }
+    // s looks like --num_threads=16
+    const auto& s = flags[i];
+    std::size_t pos = s.find('=');
+    ss << s.substr(2, pos - 2);   // 2 to skip "--"
+    ss << ": " << s.substr(pos + 1) << std::endl;
+  }
   return ss.str();
 }
 

@@ -80,13 +80,11 @@ int main(int argc, char *argv[]) {
   // Additional entries to track the staleness.
   table_config.table_info.row_capacity = num_samples
     + FLAGS_num_clients * FLAGS_num_threads;
-  LOG(INFO) << "table_config.table_info.row_capacity w: " << table_config.table_info.row_capacity;
   table_config.table_info.row_oplog_type = FLAGS_row_oplog_type;
   table_config.table_info.oplog_dense_serialized =
     FLAGS_oplog_dense_serialized;
   table_config.table_info.dense_row_oplog_capacity =
     table_config.table_info.row_capacity;
-  //table_config.process_cache_capacity = 1;  // just 1 summary row.
   table_config.process_cache_capacity = 1;
   table_config.oplog_capacity = table_config.process_cache_capacity;
   petuum::PSTableGroup::CreateTable(FLAGS_w_table_id, table_config);

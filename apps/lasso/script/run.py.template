@@ -7,17 +7,22 @@ import time
 
 params = {
     "lambda": 0.01
-    , "X_file": join(app_dir, "dataset", "ad.libsvm.nano.trunc.trans.X")
-    , "Y_file": join(app_dir, "dataset", "ad.libsvm.nano.trunc.trans.Y")
+    , "X_file": "/nfs/nas-0-16/wdai/datasets/lasso/ad/ad.libsvm.nano.trans.X"
+    , "Y_file": "/nfs/nas-0-16/wdai/datasets/lasso/ad/ad.libsvm.nano.trans.Y"
+    #, "X_file": "/nfs/nas-0-16/wdai/datasets/lasso/ad/ad.libsvm.trans.X"
+    #, "Y_file": "/nfs/nas-0-16/wdai/datasets/lasso/ad/ad.libsvm.trans.Y"
+    #, "X_file": "/scratch/wdai/ad.libsvm.trans.X"
+    #, "Y_file": "/scratch/wdai/ad.libsvm.trans.Y"
     , "global_data": "true"
     , "num_epochs": 10
     , "learning_rate": 0.001
     , "staleness": 1
     , "num_epochs_per_eval": 5
-    , "num_unused_rows": 1000
+    , "num_unused_rows": 10000
     , "num_unused_cols": 1000
     }
 exp_name = "ad"
+
 
 hostfile_name = "localserver"
 
