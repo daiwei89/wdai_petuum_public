@@ -64,7 +64,8 @@ void HelloSSPWorker(int worker_rank) {
   for (int w = 0; w < num_workers; ++w) {
     CHECK_EQ(row_cache[w], FLAGS_num_iterations);
   }
-  LOG(INFO) << "Worker " << worker_rank << " verified all clock reads.";
+  LOG(INFO) << "Worker " << worker_rank << " verified "
+    << FLAGS_num_iterations << " iterations clock reads.";
   petuum::PSTableGroup::DeregisterThread();
 }
 
