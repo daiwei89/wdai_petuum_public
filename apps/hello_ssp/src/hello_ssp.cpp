@@ -35,6 +35,9 @@ void HelloSSPWorker(int worker_rank) {
     petuum::PSTableGroup::GetTableOrDie<double>(kTableID);
   int num_workers = FLAGS_num_clients * FLAGS_num_threads;
   std::vector<double> row_cache;
+  // Register callbacks.
+  clock_table.GetAsyncForced(0);
+  clock_table.WaitPendingAsyncGet();
   for (int clock = 0; clock < FLAGS_num_iterations; ++clock) {
     std::this_thread::sleep_for(std::chrono::milliseconds(dist(rng)));
     petuum::RowAccessor row_acc;
