@@ -8,7 +8,7 @@
 #include <cstdint>
 
 // Petuum Parameters
-DEFINE_string(hostfile, "", "Path to file containing server ip:port.");
+DEFINE_string(hostfile, "", "Path to file containing server IP.");
 DEFINE_int32(num_clients, 1, "Total number of clients");
 DEFINE_int32(num_threads, 1, "Number of app threads in this client");
 DEFINE_int32(client_id, 0, "Client ID");
@@ -59,8 +59,8 @@ int main(int argc, char *argv[]) {
   table_group_config.num_local_app_threads = FLAGS_num_threads + 1;
   table_group_config.client_id = FLAGS_client_id;
   table_group_config.consistency_model = petuum::SSPPush;
-
   petuum::GetHostInfos(FLAGS_hostfile, &table_group_config.host_map);
+  //table_group_config.host_map = petuum::GetHostInfosSimple(FLAGS_hostfile);
 
   lasso::LassoEngine lasso_engine;
   int num_samples = lasso_engine.ReadData();

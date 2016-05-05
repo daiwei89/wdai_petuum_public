@@ -51,8 +51,8 @@ void ProxGrad::ProxStep(
     // workers.
     clock_diff = (clock_diff == FLAGS_staleness + 1) ?
       FLAGS_staleness : clock_diff;
-    CHECK_LE(std::abs(clock_diff), FLAGS_staleness) << "my_clock: " << my_clock
-      << " other clock: " << row_vec[i + num_samples_];
+    CHECK_LE(std::abs(clock_diff), FLAGS_staleness) << "my_clock: "
+      << my_clock << " other clock: " << row_vec[i + num_samples_];
     staleness_dist[clock_diff + FLAGS_staleness]++;
   }
   petuum::UpdateBatch<int64_t> staleness_update(2 * FLAGS_staleness + 1);

@@ -21,7 +21,11 @@ LassoEngine::LassoEngine() : thread_counter_(0) {
     + ".meta";
   petuum::ml::MetafileReader mreader(meta_file);
   // num features in the X_file (# of rows)
-  num_features_ = mreader.get_int32("num_features");
+  if (FLAGS_global_data) {
+    num_features_ = mreader.get_int32("num_features");
+  } else {
+    num_features_ = mreader.get_int32("num_features_this_partition");
+  }
   // num_samples_ is the dim of each feature column.
   num_samples_ = mreader.get_int32("num_samples");
   Y_ = petuum::ml::DenseFeature<float>(num_samples_);
@@ -37,9 +41,8 @@ LassoEngine::~LassoEngine() {
 }
 
 int LassoEngine::ReadData() {
-  //std::string X_file = FLAGS_X_file
-  //  + (FLAGS_global_data ? "" : "." + std::to_string(FLAGS_client_id));
-  std::string X_file = FLAGS_X_file;
+  std::string X_file = FLAGS_X_file
+    + (FLAGS_global_data ? "" : "." + std::to_string(FLAGS_client_id));
   LOG(INFO) << "Reading X_file: " << FLAGS_X_file;
   // Note feature and sample are transposed (each row is a feature)
   std::vector<int> feature_idx;
@@ -49,7 +52,7 @@ int LassoEngine::ReadData() {
       &feature_idx, sample_one_based_, false,  // label is real value
       snappy_compressed_);
 
-  // Read y
+  // Read y (always global).
   //std::string Y_file = FLAGS_Y_file
   //  + (FLAGS_global_data ? "" : "." + std::to_string(FLAGS_client_id));
   std::string Y_file = FLAGS_Y_file;
@@ -81,15 +84,20 @@ void LassoEngine::Start() {
 
   petuum::HighResolutionTimer total_timer;
 
-  int worker_rank = FLAGS_client_id * FLAGS_num_threads + thread_id;
-  int num_feature_per_worker = num_features_ /
-    FLAGS_num_clients / FLAGS_num_threads;
+  int global_worker_rank = FLAGS_client_id * FLAGS_num_threads + thread_id;
+  int worker_rank = FLAGS_global_data ?
+    global_worker_rank : thread_id;
+  int num_workers = FLAGS_global_data ?
+    FLAGS_num_clients * FLAGS_num_threads : FLAGS_num_threads;
+  int num_feature_per_worker = num_features_ / num_workers;
   int feature_start = worker_rank * num_feature_per_worker;
-  int feature_end = (worker_rank == FLAGS_num_clients * FLAGS_num_threads - 1)
+  int last_worker_rank = FLAGS_global_data ?
+    FLAGS_num_clients * FLAGS_num_threads - 1 : FLAGS_num_threads - 1;
+  int feature_end = (worker_rank == last_worker_rank)
     ? num_features_ : feature_start + num_feature_per_worker;
 
   ProxGradConfig pg_config;
-  pg_config.worker_rank = worker_rank;
+  pg_config.worker_rank = global_worker_rank;
   pg_config.feature_start = feature_start;
   pg_config.feature_end = feature_end;
   pg_config.num_samples = num_samples_;
@@ -97,13 +105,14 @@ void LassoEngine::Start() {
 
   int eval_counter = 0;
   for (int epoch = 1; epoch <= FLAGS_num_epochs; ++epoch) {
+    // Constant learning rate.
     pg.ProxStep(X_cols_, Y_, FLAGS_learning_rate, epoch - 1);
 
     // Evaluate objective value.
     if (epoch == 1 || epoch % FLAGS_num_epochs_per_eval == 0) {
       loss_recorder.IncLoss(eval_counter, "FullLoss", pg.EvalL1Penalty());
       loss_recorder.IncLoss(eval_counter, "BetaNNZ", pg.EvalBetaNNZ());
-      if (worker_rank == 0) {
+      if (global_worker_rank == 0) {
         loss_recorder.IncLoss(eval_counter, "FullLoss", pg.EvalSqLoss(Y_));
         loss_recorder.IncLoss(eval_counter, "Epoch", epoch);
         loss_recorder.IncLoss(eval_counter, "Time", total_timer.elapsed());
@@ -119,7 +128,7 @@ void LassoEngine::Start() {
   }
   petuum::PSTableGroup::GlobalBarrier();
 
-  if (worker_rank == 0) {
+  if (global_worker_rank == 0) {
     LOG(INFO) << "\n" << PrintExpDetail() << loss_recorder.PrintAllLoss();
     std::string output_file = FLAGS_output_dir + "/loss";
     std::ofstream out(output_file);
