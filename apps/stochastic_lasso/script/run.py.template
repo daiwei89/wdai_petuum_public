@@ -1,0 +1,91 @@
+#!/usr/bin/env python
+
+import os
+from os.path import dirname
+from os.path import join
+import time
+
+params = {
+    "lambda": 0.01
+    , "X_file": "/nfs/nas-0-16/wdai/datasets/lasso/ad/ad.libsvm.nano.trans.X"
+    , "Y_file": "/nfs/nas-0-16/wdai/datasets/lasso/ad/ad.libsvm.nano.trans.Y"
+    #, "X_file": "/nfs/nas-0-16/wdai/datasets/lasso/ad/ad.libsvm.trans.X"
+    #, "Y_file": "/nfs/nas-0-16/wdai/datasets/lasso/ad/ad.libsvm.trans.Y"
+    #, "X_file": "/scratch/wdai/ad.libsvm.trans.X"
+    #, "Y_file": "/scratch/wdai/ad.libsvm.trans.Y"
+    , "global_data": "true"
+    , "num_epochs": 10
+    , "learning_rate": 0.001
+    , "staleness": 1
+    , "num_epochs_per_eval": 5
+    , "num_unused_rows": 10000
+    , "num_unused_cols": 1000
+    }
+exp_name = "ad"
+
+
+hostfile_name = "localserver"
+
+app_dir = dirname(dirname(os.path.realpath(__file__)))
+proj_dir = dirname(dirname(app_dir))
+
+prog_name = "lasso_main"
+prog_path = join(app_dir, "bin", prog_name)
+hostfile = join(proj_dir, "machinefiles", hostfile_name)
+
+petuum_params = {
+    "hostfile": hostfile
+    , "num_threads": 2
+    }
+
+env_params = (
+  "GLOG_logtostderr=true "
+  "GLOG_v=-1 "
+  "GLOG_minloglevel=0 "
+  )
+
+ssh_cmd = (
+    "ssh "
+    "-o StrictHostKeyChecking=no "
+    "-o UserKnownHostsFile=/dev/null "
+    "-o LogLevel=quiet "
+    )
+
+# Get host IPs
+with open(hostfile, "r") as f:
+  hostlines = f.read().splitlines()
+host_ips = [line.split()[1] for line in hostlines]
+petuum_params["num_clients"] = len(host_ips)
+
+output_filename = exp_name
+output_filename += ".N" + str(petuum_params["num_clients"])
+output_filename += ".T" + str(petuum_params["num_threads"])
+output_filename += ".L" + str(params["lambda"])
+output_filename += ".lr" + str(params["learning_rate"])
+output_filename += ".S" + str(params["staleness"])
+output_filename += ".E" + str(params["num_epochs"])
+output_dir = join(app_dir, "output", output_filename)
+params["output_dir"] = output_dir
+cmd = "mkdir -p " + output_dir
+print cmd
+os.system(cmd)
+
+for ip in host_ips:
+  cmd = ssh_cmd + ip + " killall -q " + prog_name
+  os.system(cmd)
+print "Done killing"
+
+for client_id, ip in enumerate(host_ips):
+  #cmd = ssh_cmd + ip + " "
+  cmd = ""
+  cmd += env_params + prog_path
+  petuum_params["client_id"] = client_id
+  cmd += "".join([" --%s=%s" % (k,v) for k,v in petuum_params.items()])
+  cmd += "".join([" --%s=%s" % (k,v) for k,v in params.items()])
+  #cmd += " &"
+  print cmd
+  os.system(cmd)
+
+  if client_id == 0:
+    print "Waiting for first client to set up"
+    time.sleep(2)
