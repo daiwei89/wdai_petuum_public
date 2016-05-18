@@ -3,6 +3,7 @@
 import os, sys
 from os.path import dirname
 from os.path import join
+import subprocess
 
 if len(sys.argv) != 2:
   print "usage: ./kill.py <hostfile>"
@@ -22,7 +23,10 @@ ssh_cmd = (
     #"-oLogLevel=quiet "
     )
 
+procs = []
 for ip in host_ips:
   cmd = ssh_cmd + ip + " killall -q lasso_main"
-  os.system(cmd)
+  procs.append(subprocess.Popen(cmd, shell=True))
+for p in procs:
+  p.wait()
 print "Done killing"

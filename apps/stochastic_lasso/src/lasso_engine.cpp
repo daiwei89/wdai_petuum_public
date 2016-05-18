@@ -41,7 +41,8 @@ LassoEngine::LassoEngine() : thread_counter_(0) {
       num_features_ += mreader.get_int32("num_features_this_partition");
       // num_samples_ is the dim of each feature column.
       num_samples_ = mreader.get_int32("num_samples");
-      CHECK_EQ("libsvm", mreader.get_string("format")) << "Only support libsvm";
+      CHECK_EQ("libsvm", mreader.get_string("format"))
+        << "Only support libsvm";
       sample_one_based_ = mreader.get_bool("sample_one_based");
       snappy_compressed_ = mreader.get_bool("snappy_compressed");
     }
@@ -70,7 +71,6 @@ int LassoEngine::ReadData() {
     for (int i = par_begin_; i < par_end_; ++i) {
       std::string X_file = FLAGS_X_file + "." + std::to_string(i);
       LOG(INFO) << "Reading X_file: " << X_file;
-
       std::string meta_file = FLAGS_X_file
         +  "." + std::to_string(i) + ".meta";
       petuum::ml::MetafileReader mreader(meta_file);
@@ -80,14 +80,13 @@ int LassoEngine::ReadData() {
       // num_samples_ is the dim of each feature column.
       int num_samples_this_partition = mreader.get_int32("num_samples");
       // Note feature and sample are transposed (each row is a feature)
+      CHECK_EQ(1e6, num_samples_this_partition);
       std::vector<int> feature_idx;
       std::vector<petuum::ml::SparseFeature<float>*> X_cols_this_partition;
       petuum::ml::ReadDataLabelLibSVM(X_file, num_samples_this_partition,
-          num_features_this_partition,
-          reinterpret_cast<std::vector<
+          num_features_this_partition, reinterpret_cast<std::vector<
           petuum::ml::AbstractFeature<float>*>*>(&X_cols_this_partition),
-          &feature_idx, sample_one_based_, false,  // label is real value
-          snappy_compressed_);
+          &feature_idx, sample_one_based_, false, snappy_compressed_);
       for (int j = 0; j < X_cols_this_partition.size(); ++j) {
         // This transfer ownership of SparseFeature<float>* from
         // X_cols_this_partition to X_cols_.
@@ -146,6 +145,7 @@ void LassoEngine::Start() {
   pg_config.feature_start = feature_start;
   pg_config.feature_end = feature_end;
   pg_config.num_samples = num_samples_;
+  pg_config.num_reps = FLAGS_num_reps;
   ProxGrad pg(pg_config);
 
   int eval_counter = 0;

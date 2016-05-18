@@ -33,6 +33,7 @@ DEFINE_double(minibatch_ratio, 0.05, "minibatch size = minibatch_ratio * "
 DEFINE_int32(num_partitions_per_worker, 1, "when global_data is false, each "
     "client reads this many contiguous partition.");
 DEFINE_int32(num_partitions, 1, "# of partitions in total.");
+DEFINE_int32(num_reps, 1, "# of repetitions for computation");
 
 // Misc
 DEFINE_int32(w_table_id, 0, "Weight table's ID in PS.");

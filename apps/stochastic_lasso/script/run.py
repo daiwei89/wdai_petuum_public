@@ -4,6 +4,7 @@ import os
 from os.path import dirname
 from os.path import join
 import time
+import subprocess
 
 filename = 'lasso_dim100000000_s1000000_nnz5.transx100.libsvm.trans.X'
 filenameY = 'lasso_dim100000000_s1000000_nnz5.transx100.libsvm.trans.Y'
@@ -11,7 +12,7 @@ filenameY = 'lasso_dim100000000_s1000000_nnz5.transx100.libsvm.trans.Y'
 #filenameY = 'lasso_dim1000000000_s10000000_nnz5.transx100.libsvm.trans.Y'
 #C_unsafe = 2e-3
 C = 1e-4
-sampling_ratio = 0.05
+sampling_ratio = 0.1
 params = {
     "lambda": 0.1
     #, "X_file": '/users/wdai/datasets/lasso/synth/lasso_dim1000000_s500000_nnz5.transx1.libsvm.trans.X.0'
@@ -20,15 +21,16 @@ params = {
     , "Y_file": '/l0/data/%s' % filenameY
     , "global_data": "false"
     , "minibatch_ratio": sampling_ratio
-    , "num_epochs": 400
+    , "num_epochs": 60
     , "learning_rate": C / sampling_ratio
-    , "staleness": 2
-    , "num_epochs_per_eval": 12
+    , "staleness": 0
+    , "num_epochs_per_eval": 10
     , "num_unused_rows": 0
     #, "num_unused_rows": 4000
     , "num_unused_cols": 1000
     , "num_partitions": 100
     , "num_partitions_per_worker": 10
+    , "num_reps": 10
     }
 exp_name = "synth-100m"
 
@@ -43,7 +45,7 @@ hostfile = join(proj_dir, "machinefiles", hostfile_name)
 
 petuum_params = {
     "hostfile": hostfile
-    , "num_threads": 1
+    , "num_threads": 16
     }
 
 env_params = (
@@ -85,16 +87,18 @@ for ip in host_ips:
   os.system(cmd)
 print "Done killing"
 
+procs = []
 for client_id, ip in enumerate(host_ips):
   cmd = ssh_cmd + ip + " "
-  #cmd = ""
   cmd += env_params + prog_path
   petuum_params["client_id"] = client_id
   cmd += "".join([" --%s=%s" % (k,v) for k,v in petuum_params.items()])
   cmd += "".join([" --%s=%s" % (k,v) for k,v in params.items()])
   cmd += " &"
   print cmd
-  os.system(cmd)
+  procs.append(subprocess.Popen(cmd, shell=True))
+for p in procs:
+  p.wait()
 
   if client_id == 0:
     print "Waiting for first client to set up"

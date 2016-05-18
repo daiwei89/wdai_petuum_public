@@ -16,11 +16,12 @@ ProxGrad::ProxGrad(const ProxGradConfig& config) :
   feature_start_(config.feature_start),
   feature_end_(config.feature_end),
   num_features_(feature_end_ - feature_start_),
+  num_reps_(config.num_reps),
   beta_(num_features_),
   r_(num_samples_) {
-    sample_size_ = std::min(num_samples_,
+    num_feature_samples_ = std::min(num_features_,
         static_cast<int>(FLAGS_minibatch_ratio * num_features_));
-    LOG_IF(INFO, worker_rank_ == 0) << "sample size: " << sample_size_
+    LOG_IF(INFO, worker_rank_ == 0) << "sample size: " << num_feature_samples_
       << ", num_features in this worker: " << num_features_
       << ", num_samples: " << num_samples_;
     w_table_ =
@@ -86,6 +87,7 @@ void ProxGrad::ProxStep(
   const auto& w_all_row = row_acc.Get<petuum::DenseRow<float>>();
   std::vector<float> row_vec;
   w_all_row.CopyToVector(&row_vec);
+  CHECK_EQ(num_samples_ + num_workers_, row_vec.size());
 
   // Record clock differences. staleness_dist[0] corresponds to
   // -FLAGS_staleness.
@@ -100,9 +102,11 @@ void ProxGrad::ProxStep(
     // workers.
     clock_diff = (clock_diff == FLAGS_staleness + 1) ?
       FLAGS_staleness : clock_diff;
-    LOG_IF(INFO, std::abs(clock_diff) > FLAGS_staleness) << "my_clock: "
-      << my_clock << " other clock: " << row_vec[i + num_samples_];
-    staleness_dist[clock_diff + FLAGS_staleness]++;
+    //LOG_IF(FATAL, std::abs(clock_diff) > FLAGS_staleness) << "my_clock: "
+    //  << my_clock << " other clock: " << row_vec[i + num_samples_];
+    if (std::abs(clock_diff) <= FLAGS_staleness) {
+      staleness_dist[clock_diff + FLAGS_staleness]++;
+    }
   }
   petuum::UpdateBatch<int64_t> staleness_update(2 * FLAGS_staleness + 1);
   for (int s = 0; s < 2*FLAGS_staleness + 1; ++s) {
@@ -120,47 +124,39 @@ void ProxGrad::ProxStep(
 
   //int sample_size = FLAGS_minibatch_ratio * num_samples_;
   std::vector<int> sampled_dim = SampleWithoutReplacement(num_features_,
-      sample_size_, uniform_dist, rand_eng);
-  CHECK_EQ(sampled_dim.size(), sample_size_);
+      num_feature_samples_, uniform_dist, rand_eng);
+  CHECK_EQ(sampled_dim.size(), num_feature_samples_);
   std::sort(sampled_dim.begin(), sampled_dim.end());
 
-  // gradient = X_k^T (w_all - y)
-  petuum::ml::DenseFeature<float> grad(num_features_);
-  //LOG(INFO) << "dim w_all " << w_all.GetFeatureDim();
-  for (int j = 0; j < sampled_dim.size(); ++j) {
-    int dim = sampled_dim[j];
-    grad[dim] = SparseDenseFeatureDotProduct(
-        *(X_cols[feature_start_ + dim]), w_all);
-  }
-  /*
-  for (int j = 0; j < num_features_; ++j) {
-    grad[j] = SparseDenseFeatureDotProduct(
-        *(X_cols[feature_start_ + j]), w_all);
-  }
-  */
-
-  petuum::ml::DenseFeature<float> new_beta = beta_;
-  FeatureScaleAndAdd(-lr, grad, &new_beta);
-  SoftThreshold(lr * FLAGS_lambda, &new_beta);
-
-  // delta_k^{c+1} = beta_k^{c+1} - beta_k^c
-  petuum::ml::DenseFeature<float> delta = new_beta;
-  FeatureScaleAndAdd(-1, beta_, &delta);
-  beta_ = new_beta;
-
-  // X_k * delta_k^{c+1}
+  // X_delta = X_k * delta_k^{c+1}
   petuum::ml::DenseFeature<float> X_delta(num_samples_);
-  for (int j = 0; j < sampled_dim.size(); ++j) {
-    int dim = sampled_dim[j];
-    FeatureScaleAndAdd(delta[dim],
-        *(X_cols[feature_start_ + dim]), &X_delta);
+  for (int rep = 0; rep < num_reps_; ++rep) {
+    // gradient = X_k^T (w_all - y)
+    petuum::ml::DenseFeature<float> grad(num_features_);
+    //LOG(INFO) << "dim w_all " << w_all.GetFeatureDim();
+    for (int j = 0; j < sampled_dim.size(); ++j) {
+      int dim = sampled_dim[j];
+      grad[dim] = SparseDenseFeatureDotProduct(
+          *(X_cols[feature_start_ + dim]), w_all);
+    }
+
+    petuum::ml::DenseFeature<float> new_beta = beta_;
+    FeatureScaleAndAdd(-lr, grad, &new_beta);
+    SoftThreshold(lr * FLAGS_lambda, &new_beta);
+
+    // delta_k^{c+1} = beta_k^{c+1} - beta_k^c
+    petuum::ml::DenseFeature<float> delta = new_beta;
+    FeatureScaleAndAdd(-1, beta_, &delta);
+    if (rep == 0) {
+      beta_ = new_beta;
+    }
+
+    for (int j = 0; j < sampled_dim.size(); ++j) {
+      int dim = sampled_dim[j];
+      FeatureScaleAndAdd(delta[dim],
+          *(X_cols[feature_start_ + dim]), &X_delta);
+    }
   }
-  /*
-  for (int j = 0; j < num_features_; ++j) {
-    FeatureScaleAndAdd(delta[j],
-        *(X_cols[feature_start_ + j]), &X_delta);
-  }
-  */
 
   // +1 as last update entry is this worker's clock.
   petuum::UpdateBatch<float> update(num_samples_ + 1);
@@ -171,6 +167,12 @@ void ProxGrad::ProxStep(
   update.UpdateSet(num_samples_, worker_rank_ + num_samples_, 1);
   //LOG(INFO) << "worker " << worker_rank_ << " update clock entry: " << worker_rank_ + num_samples_;
   w_table_.BatchInc(0, update);
+
+  /*
+  petuum::UpdateBatch<float> update(1);
+  update.UpdateSet(0, worker_rank_ + num_samples_, 1);
+  w_table_.BatchInc(0, update);
+  */
 
   // Update unused rows
   petuum::UpdateBatch<float> unused_update(FLAGS_num_unused_cols);

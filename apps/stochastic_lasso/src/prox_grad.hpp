@@ -12,6 +12,7 @@ struct ProxGradConfig {
   int feature_start = 0;
   int feature_end = 0;
   int num_samples = 0;
+  int num_reps = 1;
 };
 
 class ProxGrad {
@@ -32,7 +33,7 @@ public:
   int EvalBetaNNZ() const;
 
   int GetSampleSize() const {
-    return sample_size_;
+    return num_feature_samples_;
   }
 
 private:
@@ -46,7 +47,9 @@ private:
   int feature_start_;
   int feature_end_;
   int num_features_;    // # features in this worker.
-  int sample_size_;   // stochastic version uses only this many in each step
+  // stochastic version uses only this many coordinates in each step
+  int num_feature_samples_;
+  int num_reps_;
   petuum::ml::DenseFeature<float> beta_;    // [num_features_ x 1]
   petuum::ml::DenseFeature<float> r_;       // [num_samples_ x 1]
   //petuum::ml::DenseFeature<float> delta_;   // [num_features_ x 1]
