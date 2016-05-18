@@ -7,7 +7,6 @@
 #include <sstream>
 #include <iostream>
 #include <algorithm>
-#include <petuum_ps/thread/numa_mgr.hpp>
 
 namespace petuum {
 TableGroup::TableGroup(const TableGroupConfig &table_group_config,
@@ -61,8 +60,6 @@ TableGroup::TableGroup(const TableGroupConfig &table_group_config,
       table_group_config.server_idle_milli,
       table_group_config.server_row_candidate_factor);
 
-  NumaMgr::Init(table_group_config.numa_opt);
-
   CommBus *comm_bus = new CommBus(local_id_min, local_id_max,
                                   num_total_clients, 1);
   GlobalContext::comm_bus = comm_bus;
@@ -86,7 +83,6 @@ TableGroup::TableGroup(const TableGroupConfig &table_group_config,
 
   if (table_access) {
     vector_clock_.AddClock(*init_thread_id, 0);
-    NumaMgr::ConfigureTableThread();
   }
 
   if (table_group_config.aggressive_clock)
@@ -152,8 +148,6 @@ int32_t TableGroup::RegisterThread() {
   petuum::CommBus::Config comm_config(thread_id, petuum::CommBus::kNone, "");
 
   ThreadContext::RegisterThread(thread_id);
-
-  NumaMgr::ConfigureTableThread();
 
   GlobalContext::comm_bus->ThreadRegister(comm_config);
 

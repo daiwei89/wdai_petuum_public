@@ -30,25 +30,6 @@ void GetHostInfos(std::string server_file,
   input.close();
 }
 
-namespace {
-
-const int kDefaultPort = 10000;
-
-}
-
-std::map<int32_t, HostInfo> GetHostInfosSimple(
-    const std::string& server_file) {
-  std::map<int32_t, HostInfo> servers;
-  std::ifstream input(server_file.c_str());
-  std::string line;
-  int id = 0;
-  while(std::getline(input, line)) {
-    servers.insert(std::make_pair(id, HostInfo(id++, line,
-            std::to_string(kDefaultPort))));
-  }
-  return servers;
-}
-
 // assuming the namenode id is 0
 void GetServerIDsFromHostMap(std::vector<int32_t> *server_ids,
     const std::map<int32_t, HostInfo>& host_map){

@@ -72,8 +72,7 @@ struct TableGroupConfig {
       oplog_push_upper_bound_kb(100),
       oplog_push_staleness_tolerance(2),
       thread_oplog_batch_size(100*1000*1000),
-      server_row_candidate_factor(5),
-      numa_opt(false) { }
+      server_row_candidate_factor(5) { }
 
   std::string stats_path;
 
@@ -147,8 +146,6 @@ struct TableGroupConfig {
   long server_idle_milli;
 
   long server_row_candidate_factor;
-
-  bool numa_opt;
 };
 
 // TableInfo is shared between client and server.

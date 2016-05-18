@@ -2,6 +2,7 @@
 // Date: 2014.10.18
 
 #include <ml/util/metafile_reader.hpp>
+#include <io/general_fstream.hpp>
 #include <fstream>
 #include <sstream>
 #include <glog/logging.h>
@@ -17,7 +18,8 @@ MetafileReader::MetafileReader(const std::string& metafile_path) {
 
 void MetafileReader::Init(const std::string& metafile_path) {
   metafile_path_ = metafile_path;
-  std::ifstream is(metafile_path_);
+  // std::ifstream is(metafile_path_);
+  petuum::io::ifstream is(metafile_path_);
   CHECK(is) << "Failed to open " << metafile_path_;
   std::string line;
   while (std::getline(is, line)) {

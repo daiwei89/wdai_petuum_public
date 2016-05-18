@@ -4,7 +4,6 @@
 #include <petuum_ps/thread/ps_msgs.hpp>
 #include <petuum_ps_common/util/stats.hpp>
 #include <petuum_ps_common/thread/mem_transfer.hpp>
-#include <petuum_ps/thread/numa_mgr.hpp>
 
 namespace petuum {
 
@@ -259,8 +258,6 @@ void ServerThread::SendOpLogAckMsg(int32_t bg_id, uint32_t version) { }
 void *ServerThread::operator() () {
 
   ThreadContext::RegisterThread(my_id_);
-
-  NumaMgr::ConfigureServerThread();
 
   STATS_REGISTER_THREAD(kServerThread);
 

@@ -52,11 +52,6 @@ float DenseSparseFeatureDotProduct(const AbstractFeature<float>& f1,
 float SparseDenseFeatureDotProduct(const AbstractFeature<float>& f1,
     const AbstractFeature<float>& f2);
 
-// Dot product only on coord_subset coordinates, which is assumed to be
-// sorted.
-float SparseDenseFeatureDotProductSubset(const AbstractFeature<float>& f1,
-    const AbstractFeature<float>& f2, const std::vector<int>& coord_subset);
-
 // If f1 is dense and f2 is sparse, it is 3x slower than the other way around.
 //
 // Comment (wdai): If we swap the two based on GetNumEntries(), it is about 15%
@@ -71,9 +66,5 @@ void FeatureScaleAndAdd(float alpha, const DenseFeature<float>& f1,
 // f2 += alpha * f1 (similar to BLAS).
 void FeatureScaleAndAdd(float alpha, const AbstractFeature<float>& f1,
     AbstractFeature<float>* f2);
-
-void FeatureScaleAndAddSubset(float alpha, const AbstractFeature<float>& f1,
-    AbstractFeature<float>* f2, const std::vector<int>& coord_subset);
-
 }  // namespace ml
 }  // namespace petuum

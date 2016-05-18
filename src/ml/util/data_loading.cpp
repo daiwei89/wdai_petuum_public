@@ -9,6 +9,7 @@
 #include <sstream>
 #include <petuum_ps_common/util/high_resolution_timer.hpp>
 #include <ml/util/data_loading.hpp>
+#include <io/general_fstream.hpp>
 #include <snappy.h>
 #include <iterator>
 #include <cmath>
@@ -30,7 +31,8 @@ void ReadDataLabelBinary(const std::string& filename,
   petuum::HighResolutionTimer read_timer;
   features->resize(num_data);
   labels->resize(num_data);
-  std::ifstream is(filename, std::ifstream::binary);
+  // std::ifstream is(filename, std::ifstream::binary);
+  petuum::io::ifstream is(filename, std::ifstream::binary);
   CHECK(is) << "Failed to open " << filename;
   std::vector<float> cache(feature_dim);
   for (int i = 0; i < num_data; ++i) {
@@ -59,7 +61,8 @@ void ReadDataLabelBinary(const std::string& filename,
   petuum::HighResolutionTimer read_timer;
   features->resize(num_data);
   labels->resize(num_data);
-  std::ifstream is(filename, std::ifstream::binary);
+  // std::ifstream is(filename, std::ifstream::binary);
+  petuum::io::ifstream is(filename, std::ifstream::binary);
   CHECK(is) << "Failed to open " << filename;
   for (int i = 0; i < num_data; ++i) {
     // Read the label
@@ -117,7 +120,8 @@ float ParseLibSVMLine(const std::string& line, std::vector<int32_t>* feature_ids
 
 // Open 'filename' and snappy decompress it to std::string.
 std::string SnappyOpenFileToString(const std::string& filename) {
-  std::ifstream file(filename, std::ifstream::binary);
+  // std::ifstream file(filename, std::ifstream::binary);
+  petuum::io::ifstream file(filename, std::ifstream::binary);
   CHECK(file) << "Can't open " << filename;
   std::string buffer((std::istreambuf_iterator<char>(file)),
       std::istreambuf_iterator<char>());
@@ -129,7 +133,8 @@ std::string SnappyOpenFileToString(const std::string& filename) {
 }
 
 std::string OpenFileToString(const std::string& filename) {
-  std::ifstream file(filename);
+  // std::ifstream file(filename);
+  petuum::io::ifstream file(filename);
   CHECK(file) << "Can't open " << filename;
   std::string buffer((std::istreambuf_iterator<char>(file)),
       std::istreambuf_iterator<char>());

@@ -6,7 +6,6 @@
 #include <glog/logging.h>
 #include <cmath>
 #include <sstream>
-#include <algorithm>
 #include <Eigen/Dense>
 
 namespace petuum {
@@ -26,7 +25,7 @@ float SafeLog(float x) {
 }
 
 float Sigmoid(float x) {
-  return 1. / (1. + exp(x));
+  return 1. / (1. + exp(-x));
 }
 
 float LogSum(float log_a, float log_b) {
@@ -82,25 +81,6 @@ float SparseDenseFeatureDotProduct(const AbstractFeature<float>& f1,
   return sum;
 }
 
-float SparseDenseFeatureDotProductSubset(const AbstractFeature<float>& f1,
-    const AbstractFeature<float>& f2, const std::vector<int>& coord_subset) {
-  CHECK_EQ(f1.GetFeatureDim(), f2.GetFeatureDim());
-  float sum = 0.;
-  int jj = 0;
-  for (int i = 0; i < f1.GetNumEntries() && jj < coord_subset.size(); ++i) {
-    int32_t f1_fid = f1.GetFeatureId(i);
-    while (coord_subset[jj] < f1_fid && jj < coord_subset.size()) {
-      auto lower = std::lower_bound(coord_subset.begin() + jj,
-          coord_subset.end(), f1_fid);
-      jj = lower - coord_subset.begin();
-    }
-    if (f1_fid == coord_subset[jj]) {
-      sum += f1.GetFeatureVal(i) * f2[f1_fid];
-    }
-  }
-  return sum;
-}
-
 float DenseSparseFeatureDotProduct(const AbstractFeature<float>& f1,
     const AbstractFeature<float>& f2) {
   return SparseDenseFeatureDotProduct(f2, f1);
@@ -141,24 +121,6 @@ void FeatureScaleAndAdd(float alpha, const AbstractFeature<float>& f1,
   for (int i = 0; i < f1.GetNumEntries(); ++i) {
     int32_t f1_fid = f1.GetFeatureId(i);
     f2->SetFeatureVal(f1_fid, alpha * f1.GetFeatureVal(i) + (*f2)[f1_fid]);
-  }
-}
-
-// f1 sparse, f2 dense.
-void FeatureScaleAndAddSubset(float alpha, const AbstractFeature<float>& f1,
-    AbstractFeature<float>* f2, const std::vector<int>& coord_subset) {
-  CHECK_EQ(f1.GetFeatureDim(), f2->GetFeatureDim());
-  int jj = 0;
-  for (int i = 0; i < f1.GetNumEntries() && jj < coord_subset.size(); ++i) {
-    int32_t f1_fid = f1.GetFeatureId(i);
-    if (coord_subset[jj] < f1_fid && jj < coord_subset.size()) {
-      auto lower = std::lower_bound(coord_subset.begin() + jj,
-          coord_subset.end(), f1_fid);
-      jj = lower - coord_subset.begin();
-    }
-    if (f1_fid == coord_subset[jj]) {
-      f2->SetFeatureVal(f1_fid, alpha * f1.GetFeatureVal(i) + (*f2)[f1_fid]);
-    }
   }
 }
 
